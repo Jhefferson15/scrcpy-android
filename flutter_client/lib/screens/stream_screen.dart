@@ -5,13 +5,22 @@ import '../widgets/glass_container.dart';
 import '../core/app_theme.dart';
 import '../features/adb/data/adb_manager.dart';
 import '../features/remote_control/services/native_decoder_bridge.dart';
+import '../features/remote_control/services/server_runner.dart';
 import 'package:flutter/services.dart';
 
 class StreamScreen extends StatefulWidget {
   final AdbManager? adbManager;
   final String deviceName;
+  final bool isTestMode;
+  final String? testIp;
 
-  const StreamScreen({super.key, this.adbManager, this.deviceName = 'Unknown Device'});
+  const StreamScreen({
+    super.key, 
+    this.adbManager, 
+    this.deviceName = 'Unknown Device',
+    this.isTestMode = false,
+    this.testIp,
+  });
 
   @override
   State<StreamScreen> createState() => _StreamScreenState();
@@ -32,54 +41,48 @@ class _StreamScreenState extends State<StreamScreen> {
 
   Future<void> _startStream() async {
      try {
-        if (widget.adbManager == null) {
+        if (!widget.isTestMode && widget.adbManager == null) {
            setState(() => _statusMessage = "No ADB Manager provided");
            return;
         }
 
-        setState(() => _statusMessage = "Initializing Decoder...");
-        // 1. Init Surface
-        // We assume textureId 0 is invalid, initSurface returns void but we need to change NativeDecoderBridge
-        // to return the ID. Since we can't change NativeDecoderBridge signature easily in this step (it's void),
-        // we might assume the plugin returns it via another call or we modify the bridge here.
-        // Wait, NativeDecoderBridge.initializeSurface returns Future<void>.
-        // BUT the channel returns the ID.
-        // I need to update NativeDecoderBridge wrapper too.
-        // For now, I will manually invoke the channel here to get the ID, bypassing the likely typed wrapper if needed, 
-        // OR I will assume I updated the bridge (I haven't).
-        // Let's use the channel directly for init to get the ID.
-        const channel = MethodChannel('com.seuapp/decoder');
-        final int textureId = await channel.invokeMethod('initSurface', {'textureId': 0}); // Arg ignored by my Native impl
-        
-        setState(() {
-           _textureId = textureId;
-           _statusMessage = "Starting Server...";
-        });
+        if (widget.isTestMode) {
+            setState(() => _statusMessage = "Initializing Decoder (Test Mode)...");
+            final int textureId = await _decoder.initializeSurface();
+            
+            setState(() {
+               _textureId = textureId;
+               _statusMessage = "Connecting to Fake Server...";
+            });
 
-        // 2. Start Server & Stream
-        // Using a basic scrcpy server command. 
-        // NOTE: This assumes scrcpy-server.jar is pushed. I logic for pushing is in 'ServerRunner' but 
-        // for this integration step we invoke valid ADB commands.
-        // If server is not there, this fails.
-        // Command: CLASSPATH=... app_process ...
-        // We'll trust the user has the jar or we should have pushed it. 
-        // Implementing Push is Step 2 in logic.
-        // For now, let's try to just open a shell and see output as "video" (logging).
-        
-        final stream = await widget.adbManager!.executeStream("echo 'Fake Video Stream Data' && sleep 5 && echo 'More Data'");
-        
+            final ip = widget.testIp ?? "10.0.2.2";
+            const port = 5555;
+            await _decoder.startTcpSession(ip, port);
+            setState(() => _statusMessage = "Connected (TCP Test: $ip:$port)");
+        } else {
+            // Get resolution BEFORE initializing decoder
+            setState(() => _statusMessage = "Querying device resolution...");
+            final runner = ServerRunner();
+            
+            // ServerRunner now returns the stream resolution
+            setState(() => _statusMessage = "Deploying server...");
+            final resolution = await runner.deployAndRun(widget.adbManager!, _decoder);
+            
+            // Initialize decoder with correct resolution
+            setState(() => _statusMessage = "Initializing Decoder...");
+            final int textureId = await _decoder.initializeSurface(
+              width: resolution['width']!,
+              height: resolution['height']!,
+            );
+            
+            setState(() {
+               _textureId = textureId;
+               _statusMessage = "Connected (${resolution['width']}x${resolution['height']})";
+            });
+        }
+
         setState(() {
            _isConnected = true;
-           _statusMessage = "Connected";
-        });
-
-        // 3. Pump Data
-        stream.listen((data) {
-           _decoder.feedH264Data(data); // Feed to native
-        }, onError: (e) {
-           if (mounted) setState(() => _statusMessage = "Stream Error: $e");
-        }, onDone: () {
-           if (mounted) setState(() => _statusMessage = "Stream Ended");
         });
 
      } catch (e) {
@@ -141,7 +144,13 @@ class _StreamScreenState extends State<StreamScreen> {
                       onPressed: () => Navigator.pop(context),
                     ),
                     const SizedBox(width: 8),
-                    Text(widget.deviceName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text(
+                        widget.deviceName,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     const Spacer(),
                     _buildStreamStat('FPS', '60'), // TODO: Real stats
                     const SizedBox(width: 16),

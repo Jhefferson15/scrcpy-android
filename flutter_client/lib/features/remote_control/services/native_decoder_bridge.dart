@@ -4,8 +4,21 @@ import 'package:flutter/services.dart';
 class NativeDecoderBridge {
   static const MethodChannel _channel = MethodChannel('com.seuapp/decoder');
 
-  Future<void> initializeSurface(int textureId) async {
-    await _channel.invokeMethod('initSurface', {'textureId': textureId});
+  Future<int> initializeSurface({int width = 1920, int height = 1080}) async {
+    final int? textureId = await _channel.invokeMethod('initSurface', {
+      'width': width,
+      'height': height,
+    });
+    return textureId ?? -1;
+  }
+
+
+  Future<void> startSession(String command) async {
+    await _channel.invokeMethod('startSession', {'command': command});
+  }
+
+  Future<void> startTcpSession(String host, int port) async {
+    await _channel.invokeMethod('startTcpSession', {'host': host, 'port': port});
   }
 
   Future<void> feedH264Data(List<int> data) async {

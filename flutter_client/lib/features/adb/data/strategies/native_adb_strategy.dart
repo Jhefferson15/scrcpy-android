@@ -73,6 +73,14 @@ class NativeAdbStrategy implements AdbStrategyInterface {
 
   @override
   Future<void> push(Uint8List data, String remotePath) async {
-      throw UnimplementedError("Push via Native Bridge not yet implemented");
+      try {
+        await platform.invokeMethod('pushFile', {
+          'path': remotePath,
+          'data': data,
+        });
+      } on PlatformException catch (e) {
+        debugPrint("Native Push Failed: ${e.message}");
+        throw ConnectionFailedException("Push failed: ${e.message}");
+      }
   }
 }

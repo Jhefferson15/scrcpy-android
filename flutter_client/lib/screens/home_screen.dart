@@ -17,6 +17,7 @@ import '../widgets/home/legacy_connections_section.dart';
 
 import 'settings_screen.dart';
 import 'stream_screen.dart';
+import '../features/adb/presentation/screens/debug_terminal_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -192,6 +193,70 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(FontAwesomeIcons.terminal),
+            tooltip: "ADB Terminal",
+            onPressed: () {
+               Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => DebugTerminalScreen(adbManager: _adbManager)),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(FontAwesomeIcons.bug),
+            tooltip: "Test Fake Server",
+            onPressed: () async {
+               // Temporary Test Trigger
+               // Address 10.0.2.2 is localhost from Android Emulator
+               // Address 127.0.0.1 is localhost from Desktop?
+               // The user likely has devices connected via USB or Wifi.
+               // We need the device to connect to the PC running the python script.
+               // Since the python script is on the PC, the device needs the PC's IP.
+               // For now, let's assume the user can input it or we just try 10.0.2.2 (standard emulator) 
+               // and maybe ask for IP in a dialog if needed. 
+               // Let's pop a dialog to get the IP.
+               
+               final ipController = TextEditingController(text: "192.168.0.x"); // Default hint
+               showDialog(
+                 context: context, 
+                 builder: (ctx) => AlertDialog(
+                   title: const Text("Test Fake Server"),
+                   content: Column(
+                     mainAxisSize: MainAxisSize.min,
+                     children: [
+                       const Text("Ensure 'dev_tools/runner.py fake-server' is running on your PC."),
+                       const SizedBox(height: 10),
+                       TextField(
+                         controller: ipController, 
+                         decoration: const InputDecoration(labelText: "PC IP Address", hintText: "e.g. 192.168.0.24"),
+                       ),
+                       const Text("Port is fixed to 5555", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                     ],
+                   ),
+                   actions: [
+                     TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+                     TextButton(
+                       onPressed: () {
+                         Navigator.pop(ctx);
+                         // Trigger Connection
+                         Navigator.push(
+                           context,
+                           MaterialPageRoute(builder: (context) => StreamScreen(
+                               adbManager: _adbManager, 
+                               deviceName: "Test Stream", 
+                               isTestMode: true, 
+                               testIp: ipController.text
+                           )),
+                         );
+                       }, 
+                       child: const Text("Connect")
+                     ),
+                   ],
+                 )
+               );
+            },
+          ),
           IconButton(
             icon: const Icon(FontAwesomeIcons.gear),
             onPressed: () {

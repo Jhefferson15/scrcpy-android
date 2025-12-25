@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="flutter_client"
+        android:label="scrcpy_client"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        
+        <!-- Debug Receiver for Headless Testing -->
+        <receiver android:name=".DebugReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.flutter_client.DEBUG_ACTION" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
